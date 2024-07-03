@@ -33,4 +33,3 @@ aws autoscaling start-instance-refresh \
 echo "Refresh initiated"
 
 exit 0
-

@@ -79,7 +79,7 @@ uploadLifecycleHookToS3()
   msys|cygwin*)    echo "WINDOWS" & set MSYS_NO_PATHCONV=1 & jar -cvf ${file_name} gitlab-runner-lifecycle-hook.py;;
   *)        echo "unknown: $OSTYPE" ;;
   esac
-  
+
   aws s3 cp --profile ${profile} ${file_name} s3://${LambdaS3Bucket}/${stack_name}/${file_name}
   if [ $? -ne 0 ]; then
       errorExit "Uploading lifecycle-hook lambda function code to S3 did not complete successfully."
@@ -90,7 +90,7 @@ uploadLifecycleHookToS3()
 uploadRunnerMonitorToS3() {
   # Note: Current lambda runtime for nodejs14 only supports aws-sdk 2.888.0,
   #  this project uses 3.x, so we have to include the aws-sdk in our function
-    
+
   file_name="${stack_name}-runner-monitor-${time_stamp}.zip"
 
   cd runner-monitor-lambda
@@ -175,7 +175,7 @@ echo "Deploying Gitlab runner in region: "$region", using AWS profile: "$profile
 echo "CloudFormation stack name: "$stack_name
 
 #Suffix for the lambda zip
-time_stamp=`date "+%Y%m%d%H%M%S"` 
+time_stamp=`date "+%Y%m%d%H%M%S"`
 
 uploadLifecycleHookToS3
 uploadRunnerMonitorToS3
