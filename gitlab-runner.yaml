@@ -52,7 +52,7 @@ Parameters:
   MaxInstanceLifetime:
     Type: Number
     Description: The maximum amount of time, in seconds, that an instance can be in service. If specified, the value must be either 0 or a number equal to or greater than 86,400 seconds (1 day).
-    Default: 86401
+    Default: 86400
   GitlabServerURL:
     Type: String
     Description: URL of the Gitlab server
