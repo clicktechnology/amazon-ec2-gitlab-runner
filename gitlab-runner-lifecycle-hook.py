@@ -9,15 +9,15 @@ import os
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
-ssm_client = boto3.client("ssm")
+ssm_client = boto3.client('ssm')
 
-LIFECYCLE_KEY = "LifecycleHookName"
-ASG_KEY = "AutoScalingGroupName"
-EC2_KEY = "EC2InstanceId"
+LIFECYCLE_KEY = 'LifecycleHookName'
+ASG_KEY = 'AutoScalingGroupName'
+EC2_KEY = 'EC2InstanceId'
 DOCUMENT_NAME = os.environ['DOCUMENT_NAME']
 DOCUMENT_LOG_GROUP_NAME = os.environ['DOCUMENT_LOG_GROUP_NAME']
 RETRY_IF_INSTANCE_DOES_NOT_EXIST = os.getenv('RETRY_IF_INSTANCE_DOES_NOT_EXIST', '')
-RESPONSE_DOCUMENT_KEY = "DocumentIdentifiers"
+RESPONSE_DOCUMENT_KEY = 'DocumentIdentifiers'
 
 def check_response(response_json):
     try:
@@ -40,9 +40,9 @@ def check_document():
     try:
         response = list_document()
         if check_response(response):
-            logger.info("Documents list: %s", response)
+            logger.info('Documents list: %s', response)
             if response[RESPONSE_DOCUMENT_KEY]:
-                logger.info("Documents exists: %s", response)
+                logger.info('Documents exists: %s', response)
                 return True
             else:
                 return False
@@ -50,7 +50,7 @@ def check_document():
             logger.error("Documents' list error: %s", response)
             return False
     except Exception as e:
-        logger.error("Document error: %s", str(e))
+        logger.error('Document error: %s', str(e))
         return None
 
 def send_command(instance_id):
@@ -64,7 +64,7 @@ def send_command(instance_id):
         timewait += timewait
 
     while True:
-        logger.info("Sending SSM Run Command")
+        logger.info('Sending SSM Run Command')
         try:
             response = ssm_client.send_command(
                 InstanceIds = [ instance_id ],
@@ -76,17 +76,17 @@ def send_command(instance_id):
                 }
                 )
             if check_response(response):
-                logger.info("Command sent: %s", response)
+                logger.info('Command sent: %s', response)
                 return response['Command']['CommandId']
             else:
-                logger.error("Command could not be sent: %s", response)
+                logger.error('Command could not be sent: %s', response)
                 return None
         except Exception as e:
-            logger.error("Command could not be sent: %s", str(e))
-            if RETRY_IF_INSTANCE_DOES_NOT_EXIST == "1":
+            logger.error('Command could not be sent: %s', str(e))
+            if RETRY_IF_INSTANCE_DOES_NOT_EXIST == '1':
                 error_text = str(e)
-                if error_text.find("InvalidInstanceId") != -1:
-                    logger.info("InvalidInstanceId, retrying after 40 seconds")
+                if error_text.find('InvalidInstanceId') != -1:
+                    logger.info('InvalidInstanceId, retrying after 40 seconds')
                     time.sleep(40)
                     pass
                     continue
@@ -108,10 +108,10 @@ def check_command(command_id, instance_id):
               response_iterator_status = response_iterator['CommandInvocations'][0]['Status']
               if response_iterator_status != 'Pending':
                   if response_iterator_status == 'InProgress' or response_iterator_status == 'Success':
-                      logging.info( "Status: %s", response_iterator_status)
+                      logging.info( 'Status: %s', response_iterator_status)
                       return True
                   else:
-                      logging.error("ERROR: status: %s", response_iterator)
+                      logging.error('ERROR: status: %s', response_iterator)
                       return False
         time.sleep(timewait)
         timewait += timewait
@@ -126,11 +126,11 @@ def abandon_lifecycle(life_cycle_hook, auto_scaling_group, instance_id):
             InstanceId=instance_id
             )
         if check_response(response):
-            logger.info("Lifecycle hook abandoned correctly: %s", response)
+            logger.info('Lifecycle hook abandoned correctly: %s', response)
         else:
-            logger.error("Lifecycle hook could not be abandoned: %s", response)
+            logger.error('Lifecycle hook could not be abandoned: %s', response)
     except Exception as e:
-        logger.error("Lifecycle hook abandon could not be executed: %s", str(e))
+        logger.error('Lifecycle hook abandon could not be executed: %s', str(e))
         return None
 
 def lambda_handler(event, context):
@@ -145,7 +145,7 @@ def lambda_handler(event, context):
                 command_id = send_command(instance_id)
                 if command_id != None:
                     if check_command(command_id, instance_id):
-                        logging.info("Lambda executed correctly")
+                        logging.info('Lambda executed correctly')
                     else:
                         abandon_lifecycle(life_cycle_hook, auto_scaling_group, instance_id)
                 else:
@@ -153,6 +153,6 @@ def lambda_handler(event, context):
             else:
                 abandon_lifecycle(life_cycle_hook, auto_scaling_group, instance_id)
         else:
-            logging.error("No valid JSON message: %s", message)
+            logging.error('No valid JSON message: %s', message)
     except Exception as e:
-        logging.error("Error: %s", str(e))
+        logging.error('Error: %s', str(e))

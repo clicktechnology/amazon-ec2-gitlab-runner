@@ -12,7 +12,7 @@ Parameters:
     Description: "Use Private App Subnets"
   ImageId:
     Type: 'AWS::EC2::Image::Id'
-    Description: The image ID to use to create the EC2 runner instance.  
+    Description: The image ID to use to create the EC2 runner instance.
   InstanceType:
     Type: "String"
     Default: "t3.medium"
@@ -23,11 +23,11 @@ Parameters:
     Description: "Name of the runner instance being created"
   VolumeSize:
     Type: "Number"
-    Default: 200
+    Default: 20
     Description: "Volume size"
   VolumeType:
     Type: "String"
-    Default: "gp2"
+    Default: "gp3"
     Description: "Volume Type Attached to instance"
   MaxSize:
     Type: "Number"
@@ -52,13 +52,13 @@ Parameters:
   MaxInstanceLifetime:
     Type: Number
     Description: The maximum amount of time, in seconds, that an instance can be in service. If specified, the value must be either 0 or a number equal to or greater than 86,400 seconds (1 day).
-    Default: 604800
+    Default: 86401
   GitlabServerURL:
     Type: String
     Description: URL of the Gitlab server
   DockerImagePath:
     Type: String
-    Description: Docker path of the GitLab Runner Docker image    
+    Description: Docker path of the GitLab Runner Docker image
   RunnersToken:
     Type: "String"
     Description: "Comma delimited tokens for the Gitlab projects you want to register to the runner. See runner registration process: https://docs.gitlab.com/runner/register/. "
@@ -75,12 +75,12 @@ Parameters:
     Description: "The environment that the runner is in"
   LambdaS3Bucket:
     Type: String
-    Default: ""
+    Default: "gitlab-runner-lambda-functions-ur673j"
     Description: "The s3 bucket to store the lambda functions in"
   TimeStamp:
     Type: "String"
     Description: "A timestamp for this deployment. This is used to identify the correct lambda code on S3 for deployment."
-  Concurrent: 
+  Concurrent:
     Type: "Number"
     Description: "Number of concurrent jobs allowed on a Gitlab Runner"
   CheckInterval:
@@ -94,15 +94,15 @@ Parameters:
     Description: ID of the application.
   ScaleInCoolDownInSeconds:
     Type: Number
-    Default: 600
+    Default: 60
     Description: The delay before we begin scaling down an autoscaling group. Scale Up does not obey this value.
   CountOfNewJobsBeforeScaling:
     Type: Number
     Default: 2
     Description: The number of jobs that we should be able to take before needing to wait on a scaling event.
 
-Mappings: 
-  GitlabRunnerRegisterOptionsMap: 
+Mappings:
+  GitlabRunnerRegisterOptionsMap:
     dev:
       isLOCKED: "false"
       ACCESS: "not_protected"
@@ -112,7 +112,7 @@ Mappings:
     prod:
       isLOCKED: "true"
       ACCESS: "ref_protected"
-    
+
 Resources:
   GitlabRunnerRole:
     Type: 'AWS::IAM::Role'
@@ -130,13 +130,15 @@ Resources:
         - 'arn:aws:iam::aws:policy/CloudWatchAgentAdminPolicy'
         - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       RoleName: GitlabRunnerRole
-  InstanceProfile:
+
+  GitlabRunnerInstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      InstanceProfileName: GitlabRunnerRole
+      InstanceProfileName: GitlabRunnerInstanceProfile
       Path: /
       Roles:
         - !Ref GitlabRunnerRole
+
   GitlabRunnerPolicy:
     Type: 'AWS::IAM::ManagedPolicy'
     Properties:
@@ -158,16 +160,16 @@ Resources:
             Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*'
             Effect: Allow
           - Sid: AllowSSMDocumentSend
-            Action: 
+            Action:
               - 'ssm:SendCommand'
-            Resource: 
+            Resource:
               - !Sub 'arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*'
               - !Sub 'arn:aws:ssm:*:${AWS::AccountId}:document/${Document}'
-            Effect: Allow            
-          - Sid: AllowCompleteLifycycle
+            Effect: Allow
+          - Sid: AllowCompleteLifecycle
             Action: 'autoscaling:CompleteLifecycleAction'
             Resource: !Sub 'arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${AWS::StackName}-asg'
-            Effect: Allow              
+            Effect: Allow
       ManagedPolicyName: !Sub ${AWS::StackName}-policy
       Roles:
         - !Ref GitlabRunnerRole
@@ -222,7 +224,9 @@ Resources:
               VolumeType: !Ref VolumeType
               Encrypted: true
         IamInstanceProfile:
-          Arn: !Sub 'arn:aws:iam::${AWS::AccountId}:instance-profile/GitlabRunnerRole'
+          Arn: !GetAtt
+            - GitlabRunnerInstanceProfile
+            - Arn
         ImageId: !Ref ImageId
         InstanceType: !Ref InstanceType
         SecurityGroupIds:
@@ -282,11 +286,11 @@ Resources:
             06InstallGitlabRunner:
               command: sudo gitlab-runner install --user=gitlab-runner --working-directory=/home/gitlab-runner
             07StartGitlabRunner:
-              command: sudo gitlab-runner start              
+              command: sudo gitlab-runner start
             08SetRegion:
               command: !Sub 'aws configure set default.region ${AWS::Region}'
             09ConfigureDockerExecutor:
-              command: !Sub 
+              command: !Sub
                 - |
                   for GitlabGroupToken in `aws ssm get-parameters --names /${AWS::StackName}/ci-tokens --query 'Parameters[0].Value' | sed -e "s/\"//g" | sed "s/,/ /g"`;do
                       sudo gitlab-runner register \
@@ -296,12 +300,15 @@ Resources:
                       --executor "docker" \
                       --docker-image "${DockerImagePath}" \
                       --description "Gitlab Runner with Docker Executor" \
-                      --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" 
+                      --docker-volumes "/var/run/docker.sock:/var/run/docker.sock" \
+                      --locked ${isLOCKED} \
+                      --access-level ${ACCESS}
                   done
                 - isLOCKED: !FindInMap [GitlabRunnerRegisterOptionsMap, !Ref RunnerEnvironment, isLOCKED]
                   ACCESS: !FindInMap [GitlabRunnerRegisterOptionsMap, !Ref RunnerEnvironment, ACCESS]
             10StartCfnHup:
               command: systemctl start cfn-hup && systemctl enable cfn-hup
+
   RunnerAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     CreationPolicy:
@@ -325,9 +332,7 @@ Resources:
       MaxInstanceLifetime: !Ref MaxInstanceLifetime
       LaunchTemplate:
         LaunchTemplateId: !Ref RunnerLaunchTemplate
-        Version: !GetAtt 
-          - RunnerLaunchTemplate
-          - LatestVersionNumber
+        Version: !GetAtt RunnerLaunchTemplate.LatestVersionNumber
       DesiredCapacity: !Ref DesiredCapacity
       MinSize: !Ref MinSize
       MaxSize: !Ref MaxSize
@@ -346,6 +351,12 @@ Resources:
           PropagateAtLaunch : true
         - Key: "COST_CENTER"
           Value: !Ref CostCenter
+          PropagateAtLaunch : true
+        - Key: "ENVIRONMENT"
+          Value: !Ref RunnerEnvironment
+          PropagateAtLaunch : true
+        - Key: "Version"
+          Value: !Ref RunnerVersion
           PropagateAtLaunch : true
       TerminationPolicies:
         # If the launch configuration is out of date, then replace it.
@@ -417,6 +428,12 @@ Resources:
           Value: !Ref AppId
         - Key: "COST_CENTER"
           Value: !Ref CostCenter
+        - Key: "ENVIRONMENT"
+          Value: !Ref RunnerEnvironment
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-runner-lifecycle-hook"
+        - Key: "Version"
+          Value: !Ref RunnerVersion
 
   LifeCycleHookFunction:
     Type: AWS::Lambda::Function
@@ -429,7 +446,7 @@ Resources:
       Handler: gitlab-runner-lifecycle-hook.lambda_handler
       # TODO: This role is likely too permissive
       Role: !GetAtt GitlabRunnerRole.Arn
-      Runtime: python3.9
+      Runtime: python3.11
       Environment:
         Variables:
           DOCUMENT_NAME: !Ref Document
@@ -439,6 +456,12 @@ Resources:
           Value: !Ref AppId
         - Key: "COST_CENTER"
           Value: !Ref CostCenter
+        - Key: "ENVIRONMENT"
+          Value: !Ref RunnerEnvironment
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-runner-lifecycle-hook"
+        - Key: "Version"
+          Value: !Ref RunnerVersion
 
   Permission:
     Type: AWS::Lambda::Permission
@@ -450,16 +473,14 @@ Resources:
   Rule:
     Type: AWS::Events::Rule
     Properties:
-      EventPattern: !Sub 
-        - |
-          {
-            "source": ["aws.autoscaling"],
-            "detail-type": ["EC2 Instance-terminate Lifecycle Action"],
-            "detail": {
-              "AutoScalingGroupName": ["${ASG}"]
-            }
-          }
-        - { ASG: !Ref RunnerAutoScalingGroup }
+      EventPattern:
+        source:
+          - "aws.autoscaling"
+        detail-type:
+          - "EC2 Instance-terminate Lifecycle Action"
+        detail:
+          AutoScalingGroupName:
+            - !Ref RunnerAutoScalingGroup
       Targets:
       - Arn: !GetAtt LifeCycleHookFunction.Arn
         Id: target
@@ -501,7 +522,7 @@ Resources:
         S3Key: !Sub "${AWS::StackName}/${AWS::StackName}-runner-monitor-${TimeStamp}.zip"
       Handler: index.handler
       Role: !GetAtt RunnerMonitorRole.Arn
-      Runtime: nodejs14.x
+      Runtime: nodejs20.x
       Timeout: 900
       MemorySize: 256
       ReservedConcurrentExecutions: 1
@@ -523,6 +544,12 @@ Resources:
           Value: !Ref AppId
         - Key: "COST_CENTER"
           Value: !Ref CostCenter
+        - Key: "ENVIRONMENT"
+          Value: !Ref RunnerEnvironment
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-runner-monitor"
+        - Key: "Version"
+          Value: !Ref RunnerVersion
 
   RunnerMonitorLambdaPermission:
     Type: AWS::Lambda::Permission

@@ -1,13 +1,6 @@
 {
-  "name": "runner-monitor-lambda",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "build": "tsc && copyfiles --up 1 \"src/**/*.ts\" \"bin\" && copyfiles \"node_modules/**\" \"bin\""
-  },
   "author": "",
-  "license": "ISC",
+  "description": "",
   "devDependencies": {
     "@aws-sdk/client-auto-scaling": "^3.19.0",
     "@aws-sdk/client-cloudwatch": "^3.19.0",
@@ -17,5 +10,12 @@
     "@types/node": "^15.12.4",
     "copyfiles": "^2.4.1",
     "typescript": "^4.3.4"
-  }
+  },
+  "license": "ISC",
+  "main": "index.js",
+  "name": "runner-monitor-lambda",
+  "scripts": {
+    "build": "tsc && copyfiles --up 1 \"src/**/*.ts\" \"bin\" && copyfiles \"node_modules/**\" \"bin\""
+  },
+  "version": "1.0.0"
 }
